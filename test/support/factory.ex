@@ -83,6 +83,18 @@ defmodule PolicrMini.Factory do
     }
   end
 
+  @day_secs 3600 * 24
+
+  def build(:statistic) do
+    beginning_date = DateTime.utc_now()
+
+    %PolicrMini.Schemas.Statistic{
+      beginning_date: beginning_date,
+      ending_date: beginning_date |> DateTime.add(@day_secs * 7, :second),
+      filter_status: :passed
+    }
+  end
+
   def build(factory_name, attrs) when is_atom(factory_name) and is_list(attrs) do
     factory_name |> build() |> struct(attrs)
   end
