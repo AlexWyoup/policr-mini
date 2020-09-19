@@ -5,7 +5,7 @@ defmodule PolicrMini.Schemas.Statistic do
 
   use PolicrMini.Schema
 
-  @required_fields ~w(chat_id beginning_date ending_date filter_status)a
+  @required_fields ~w(chat_id beginning_date ending_date status_cont)a
   @optional_fields ~w(
                       verifications_count
                       top_1_language_code
@@ -20,7 +20,7 @@ defmodule PolicrMini.Schemas.Statistic do
     belongs_to :chat, Chat
     field :beginning_date, :utc_datetime_usec
     field :ending_date, :utc_datetime_usec
-    field :filter_status, VerificationStatusEnum
+    field :status_cont, VerificationStatusEnum
     field :verifications_count, :integer
     field :top_1_language_code, {:map, :integer}
     field :top_2_language_code, {:map, :integer}

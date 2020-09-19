@@ -91,7 +91,7 @@ defmodule PolicrMini.Factory do
     %PolicrMini.Schemas.Statistic{
       beginning_date: beginning_date,
       ending_date: beginning_date |> DateTime.add(@day_secs * 7, :second),
-      filter_status: :passed
+      status_cont: :passed
     }
   end
 

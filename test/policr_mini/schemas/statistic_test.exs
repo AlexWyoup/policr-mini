@@ -14,7 +14,7 @@ defmodule PolicrMini.Schemas.StatisticTest do
                  :chat_id,
                  :beginning_date,
                  :ending_date,
-                 :filter_status,
+                 :status_cont,
                  :verifications_count,
                  :top_1_language_code,
                  :top_2_language_code,
@@ -29,18 +29,18 @@ defmodule PolicrMini.Schemas.StatisticTest do
   test "changeset/2" do
     statistic = Factory.build(:statistic, chat_id: 123_456_789_011)
 
-    updated_filter_status = :wronged
+    updated_status_cont = :wronged
     updated_verifications_count = 50
     updated_top_1_language_code = %{"zh-hans" => 99}
 
     params = %{
-      "filter_status" => updated_filter_status,
+      "status_cont" => updated_status_cont,
       "verifications_count" => updated_verifications_count,
       "top_1_language_code" => updated_top_1_language_code
     }
 
     changes = %{
-      filter_status: updated_filter_status,
+      status_cont: updated_status_cont,
       verifications_count: updated_verifications_count,
       top_1_language_code: updated_top_1_language_code
     }
@@ -55,7 +55,7 @@ defmodule PolicrMini.Schemas.StatisticTest do
              :chat_id,
              :beginning_date,
              :ending_date,
-             :filter_status
+             :status_cont
            ]
 
     assert changeset.valid?
