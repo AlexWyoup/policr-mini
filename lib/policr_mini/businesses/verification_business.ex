@@ -141,8 +141,13 @@ defmodule PolicrMini.VerificationBusiness do
     from(v in Verification, select: count(v.id)) |> Repo.one()
   end
 
-  @type find_total_cont_status :: :passed | :timeout
-  @type find_total_cont :: [{:status, find_total_cont_status}]
+  @type find_total_cont_status :: VerificationStatusEnum.t()
+  @type find_total_cont :: [
+          {:status, find_total_cont_status},
+          {:chat_id, integer},
+          {:beginning_date_time, DateTime.t()},
+          {:ending_date_time, DateTime.t()}
+        ]
 
   # TODO：添加测试。
   @doc """
@@ -157,15 +162,22 @@ defmodule PolicrMini.VerificationBusiness do
         true
       end
 
-    from(v in Verification, select: count(v.id), where: ^filter_status) |> Repo.one()
+    filter_chat_id =
+      if chat_id = Keyword.get(cont, :chat_id) do
+        dynamic([v], v.chat_id == ^chat_id)
+      else
+        true
+      end
+
+    # TODO: 条件 `beginning_date_time` 待实现。
+    # TODO: 条件 `ending_date_time` 待实现。
+
+    from(v in Verification, select: count(v.id), where: ^filter_status, where: ^filter_chat_id)
+    |> Repo.one()
   end
 
-  defp build_find_total_status_filter(:passed) do
-    dynamic([v], v.status == ^VerificationStatusEnum.__enum_map__()[:passed])
-  end
-
-  defp build_find_total_status_filter(:timeout) do
-    dynamic([v], v.status == ^VerificationStatusEnum.__enum_map__()[:timeout])
+  defp build_find_total_status_filter(status) do
+    dynamic([v], v.status == ^status)
   end
 
   @type find_list_cont :: [

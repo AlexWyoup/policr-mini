@@ -54,8 +54,7 @@ defmodule PolicrMini.Schemas.StatisticTest do
     assert changeset.required == [
              :chat_id,
              :beginning_date,
-             :ending_date,
-             :status_cont
+             :ending_date
            ]
 
     assert changeset.valid?

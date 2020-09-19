@@ -83,14 +83,12 @@ defmodule PolicrMini.Factory do
     }
   end
 
-  @day_secs 3600 * 24
-
   def build(:statistic) do
-    beginning_date = DateTime.utc_now()
+    beginning_date = Date.utc_today()
 
     %PolicrMini.Schemas.Statistic{
       beginning_date: beginning_date,
-      ending_date: beginning_date |> DateTime.add(@day_secs * 7, :second),
+      ending_date: beginning_date |> Date.add(-7),
       status_cont: :passed
     }
   end
