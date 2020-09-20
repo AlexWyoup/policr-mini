@@ -13,7 +13,7 @@ defmodule PolicrMini.StatisticBusiness do
 
   @type written_returns :: {:ok, Statistic.t()} | {:error, Ecto.Changeset.t()}
 
-  @spec create(map) :: written_returns
+  @spec create(PolicrMini.Schema.params()) :: written_returns
   def create(params) do
     %Statistic{} |> Statistic.changeset(params) |> Repo.insert()
   end
@@ -23,7 +23,42 @@ defmodule PolicrMini.StatisticBusiness do
     stat |> Statistic.changeset(attrs) |> Repo.update()
   end
 
-  @type find_latest_cont :: [{:chat_id, integer}, {:filter_status, VerificationStatusEnum.t()}]
+  @spec fetch(PolicrMini.Schema.params()) :: written_returns | {:error, {:not_exists, atom}}
+  def fetch(params) do
+    existing_check = fn field ->
+      if v = params[field] do
+        {:ok, v}
+      else
+        {:not_exists, field}
+      end
+    end
+
+    with {:ok, chat_id} <- existing_check.(:chat_id),
+         {:ok, beginning_date} <- existing_check.(:beginning_date),
+         {:ok, ending_date} <- existing_check.(:ending_date) do
+      find_latest_cont = [
+        chat_id: chat_id,
+        beginning_date: beginning_date,
+        ending_date: ending_date,
+        status_cont: params[:status_cont]
+      ]
+
+      if stat = find_latest(find_latest_cont) do
+        update(stat, params)
+      else
+        create(params)
+      end
+    else
+      {:not_exists, field} -> {:error, {:not_exists, field}}
+    end
+  end
+
+  @type find_latest_cont :: [
+          {:chat_id, integer},
+          {:status_cont, VerificationStatusEnum.t()},
+          {:beginning_date, Date.t()},
+          {:ending_date, Date.t()}
+        ]
 
   @spec find_latest(find_latest_cont) :: Statistic.t() | nil
   def find_latest(cont \\ []) do
@@ -41,16 +76,29 @@ defmodule PolicrMini.StatisticBusiness do
         true
       end
 
+    filter_beginning_date =
+      if beginning_date = cont[:beginning_date] do
+        dynamic([s], s.beginning_date == ^beginning_date)
+      end
+
+    filter_ending_date =
+      if ending_date = cont[:ending_date] do
+        dynamic([s], s.ending_date == ^ending_date)
+      end
+
     from(s in Statistic,
       where: ^filter_chat_id,
       where: ^filter_status_cont,
+      where: ^filter_beginning_date,
+      where: ^filter_ending_date,
       limit: 1,
       order_by: [desc: :inserted_at]
     )
     |> Repo.one()
   end
 
-  @spec gen_a_week(Date.t(), integer) :: {:ok, [Statistic.t()]} | {:error, any}
+  @spec gen_a_week(Date.t(), integer) ::
+          {:ok, [Statistic.t()]} | {:error, Ecto.Changeset.t()} | {:error, {:not_exists, atom}}
   def gen_a_week(ending_date, chat_id) do
     to_naive_dt = fn date ->
       erl = Date.to_erl(date)
@@ -69,8 +117,6 @@ defmodule PolicrMini.StatisticBusiness do
       ending_date
       |> to_naive_dt.()
       |> DateTime.from_naive!("Etc/UTC")
-
-    # TODO: 缺乏对已存在的统计数据的检查。
 
     count_cont = [
       chat_id: chat_id,
@@ -102,16 +148,24 @@ defmodule PolicrMini.StatisticBusiness do
     wronged_stat = %{stat | verifications_count: wronged_count, status_cont: :wronged}
 
     Repo.transaction(fn ->
-      with {:ok, stat} <- create(stat),
-           {:ok, passed_stat} <- create(passed_stat),
-           {:ok, timeout_stat} <- create(timeout_stat),
-           {:ok, wronged_stat} <- create(wronged_stat) do
+      with {:ok, stat} <- fetch(stat),
+           {:ok, passed_stat} <- fetch(passed_stat),
+           {:ok, timeout_stat} <- fetch(timeout_stat),
+           {:ok, wronged_stat} <- fetch(wronged_stat) do
         [stat, passed_stat, timeout_stat, wronged_stat]
       else
-        e ->
+        {:error, {:not_exists, _} = reason} ->
+          Logger.unitized_error("A bug occurs, statistics generation",
+            chat_id: chat_id,
+            reason: reason
+          )
+
+          Repo.rollback(reason)
+
+        {:error, reason} = e ->
           Logger.unitized_error("Statistics generation", e)
 
-          e
+          Repo.rollback(reason)
       end
     end)
   end
