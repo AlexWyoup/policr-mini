@@ -143,10 +143,10 @@ defmodule PolicrMini.VerificationBusiness do
 
   @type find_total_cont_status :: VerificationStatusEnum.t()
   @type find_total_cont :: [
-          {:status, find_total_cont_status},
           {:chat_id, integer},
           {:beginning_date_time, DateTime.t()},
-          {:ending_date_time, DateTime.t()}
+          {:ending_date_time, DateTime.t()},
+          {:status, find_total_cont_status}
         ]
 
   # TODO：添加测试。
@@ -155,13 +155,6 @@ defmodule PolicrMini.VerificationBusiness do
   """
   @spec find_total(find_total_cont) :: integer
   def find_total(cont \\ []) do
-    filter_status =
-      if status = Keyword.get(cont, :status) do
-        build_find_total_status_filter(status)
-      else
-        true
-      end
-
     filter_chat_id =
       if chat_id = Keyword.get(cont, :chat_id) do
         dynamic([v], v.chat_id == ^chat_id)
@@ -169,10 +162,34 @@ defmodule PolicrMini.VerificationBusiness do
         true
       end
 
-    # TODO: 条件 `beginning_date_time` 待实现。
-    # TODO: 条件 `ending_date_time` 待实现。
+    filter_beginning_date_time =
+      if beginning_date_time = Keyword.get(cont, :beginning_date_time) do
+        dynamic([v], v.inserted_at >= ^beginning_date_time)
+      else
+        true
+      end
 
-    from(v in Verification, select: count(v.id), where: ^filter_status, where: ^filter_chat_id)
+    filter_ending_date_time =
+      if ending_date_time = Keyword.get(cont, :ending_date_time) do
+        dynamic([v], v.inserted_at <= ^ending_date_time)
+      else
+        true
+      end
+
+    filter_status =
+      if status = Keyword.get(cont, :status) do
+        build_find_total_status_filter(status)
+      else
+        true
+      end
+
+    from(v in Verification,
+      select: count(v.id),
+      where: ^filter_chat_id,
+      where: ^filter_beginning_date_time,
+      where: ^filter_ending_date_time,
+      where: ^filter_status
+    )
     |> Repo.one()
   end
 
@@ -242,4 +259,90 @@ defmodule PolicrMini.VerificationBusiness do
   end
 
   defp build_find_list_status_filter(_), do: true
+
+  @typedoc "语言代码数据的统计。它表达了语言代码和用户数量的映射关系。"
+  @type language_code_stat :: %{language_code: String.t(), count: integer}
+  @typedoc "查找语言代码的统计数据的条件。"
+  @type find_language_code_stat :: [
+          {:chat_id, integer},
+          {:beginning_date_time, DateTime.t()},
+          {:ending_date_time, DateTime.t()},
+          {:status, VerificationStatusEnum.t()},
+          {:limit, integer},
+          {:order, :count_desc | :count_asc}
+        ]
+
+  @limit 2
+  @default_find_language_code_stat_order [desc: :count]
+
+  # TODO: 添加测试。
+  @doc """
+  查找语言代码的统计数据。
+
+  通过可选条件查询语言代码的统计数据。
+
+  ## 可选条件
+  - `chat_id`: 群组 ID。
+  - `beginning_date_time`: 开始日期时间。
+  - `ending_date_time`: 结束日期时间。
+  - `status`: 验证状态。
+  - `limit`: 数量限制。默认值为 `2`。
+  - `order`: 排序方式。有两种值，分别是 `:count_desc`（根据数量降序）和 `:count_asc`（根据数量升序）。默认值为 `:count_desc`。
+  """
+  @spec find_language_code_stat(find_language_code_stat) :: [language_code_stat]
+  def find_language_code_stat(cont \\ []) do
+    filter_chat_id =
+      if chat_id = Keyword.get(cont, :chat_id) do
+        dynamic([v], v.chat_id == ^chat_id)
+      else
+        true
+      end
+
+    filter_beginning_date_time =
+      if beginning_date_time = Keyword.get(cont, :beginning_date_time) do
+        dynamic([v], v.inserted_at >= ^beginning_date_time)
+      else
+        true
+      end
+
+    filter_ending_date_time =
+      if ending_date_time = Keyword.get(cont, :ending_date_time) do
+        dynamic([v], v.inserted_at <= ^ending_date_time)
+      else
+        true
+      end
+
+    filter_status =
+      if status = Keyword.get(cont, :status) do
+        dynamic([v], v.status == ^status)
+      else
+        true
+      end
+
+    limit = Keyword.get(cont, :limit, @limit)
+
+    order_by =
+      case Keyword.get(cont, :order, :count_desc) do
+        :count_desc -> @default_find_language_code_stat_order
+        :count_asc -> [asc: :count]
+        _ -> @default_find_language_code_stat_order
+      end
+
+    from(
+      v in Verification,
+      select: %{
+        language_code: v.target_user_language_code,
+        count: count(v.target_user_id, :distinct)
+      },
+      where: ^filter_chat_id,
+      where: ^filter_beginning_date_time,
+      where: ^filter_ending_date_time,
+      where: ^filter_status,
+      where: not is_nil(v.target_user_language_code),
+      group_by: v.target_user_language_code,
+      order_by: ^order_by,
+      limit: ^limit
+    )
+    |> Repo.all()
+  end
 end

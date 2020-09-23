@@ -5,7 +5,6 @@ defmodule PolicrMini.StatisticBusiness do
 
   use PolicrMini, business: PolicrMini.Schemas.Statistic
 
-  alias PolicrMini.Logger
   alias PolicrMini.EctoEnums.VerificationStatusEnum
   alias PolicrMini.VerificationBusiness
 
@@ -154,17 +153,7 @@ defmodule PolicrMini.StatisticBusiness do
            {:ok, wronged_stat} <- fetch(wronged_stat) do
         [stat, passed_stat, timeout_stat, wronged_stat]
       else
-        {:error, {:not_exists, _} = reason} ->
-          Logger.unitized_error("A bug occurs, statistics generation",
-            chat_id: chat_id,
-            reason: reason
-          )
-
-          Repo.rollback(reason)
-
-        {:error, reason} = e ->
-          Logger.unitized_error("Statistics generation", e)
-
+        {:error, reason} = _e ->
           Repo.rollback(reason)
       end
     end)
