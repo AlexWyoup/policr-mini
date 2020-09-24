@@ -96,6 +96,13 @@ defmodule PolicrMini.StatisticBusiness do
     |> Repo.one()
   end
 
+  @doc """
+  生成一周的统计数据。
+
+  ## 参数
+  - `ending_date`: 结束日期。统计数据的范围将会从相对于此日期的七天前开始到此日期截至。
+  - `chat_id`: 需要统计的群组 ID。
+  """
   @spec gen_a_week(Date.t(), integer) ::
           {:ok, [Statistic.t()]} | {:error, Ecto.Changeset.t()} | {:error, {:not_exists, atom}}
   def gen_a_week(ending_date, chat_id) do
@@ -117,34 +124,67 @@ defmodule PolicrMini.StatisticBusiness do
       |> to_naive_dt.()
       |> DateTime.from_naive!("Etc/UTC")
 
-    count_cont = [
+    base_cont = [
       chat_id: chat_id,
       beginning_date_time: beginning_date_time,
       ending_date_time: ending_date_time
     ]
 
-    passed_count_cont = count_cont ++ [status: :passed]
-    timeout_count_cont = count_cont ++ [status: :timeout]
-    wronged_count_cont = count_cont ++ [status: :wronged]
+    passed_cont = base_cont ++ [status: :passed]
+    timeout_cont = base_cont ++ [status: :timeout]
+    wronged_cont = base_cont ++ [status: :wronged]
 
-    count = VerificationBusiness.find_total(count_cont)
-    passed_count = VerificationBusiness.find_total(passed_count_cont)
-    timeout_count = VerificationBusiness.find_total(timeout_count_cont)
-    wronged_count = VerificationBusiness.find_total(wronged_count_cont)
+    count = VerificationBusiness.find_total(base_cont)
+    passed_count = VerificationBusiness.find_total(passed_cont)
+    timeout_count = VerificationBusiness.find_total(timeout_cont)
+    wronged_count = VerificationBusiness.find_total(wronged_cont)
 
-    # TODO: 缺乏语言代码统计。
+    language_code_stat = VerificationBusiness.find_language_code_stat(base_cont)
+    passed_language_code_stat = VerificationBusiness.find_language_code_stat(passed_cont)
+    timeout_language_code_stat = VerificationBusiness.find_language_code_stat(timeout_cont)
+    wronged_language_code_stat = VerificationBusiness.find_language_code_stat(wronged_cont)
+
+    get_top = fn language_code_stats, index ->
+      if stat = Enum.at(language_code_stats, index) do
+        %{stat[:language_code] => stat[:count]}
+      else
+        nil
+      end
+    end
 
     stat = %{
       chat_id: chat_id,
       beginning_date: beginning_date,
       ending_date: ending_date,
       verifications_count: count,
-      status_cont: nil
+      status_cont: nil,
+      top_1_language_code: get_top.(language_code_stat, 0),
+      top_2_language_code: get_top.(language_code_stat, 1)
     }
 
-    passed_stat = %{stat | verifications_count: passed_count, status_cont: :passed}
-    timeout_stat = %{stat | verifications_count: timeout_count, status_cont: :timeout}
-    wronged_stat = %{stat | verifications_count: wronged_count, status_cont: :wronged}
+    passed_stat = %{
+      stat
+      | verifications_count: passed_count,
+        status_cont: :passed,
+        top_1_language_code: get_top.(passed_language_code_stat, 0),
+        top_2_language_code: get_top.(passed_language_code_stat, 1)
+    }
+
+    timeout_stat = %{
+      stat
+      | verifications_count: timeout_count,
+        status_cont: :timeout,
+        top_1_language_code: get_top.(timeout_language_code_stat, 0),
+        top_2_language_code: get_top.(timeout_language_code_stat, 1)
+    }
+
+    wronged_stat = %{
+      stat
+      | verifications_count: wronged_count,
+        status_cont: :wronged,
+        top_1_language_code: get_top.(wronged_language_code_stat, 0),
+        top_2_language_code: get_top.(wronged_language_code_stat, 1)
+    }
 
     Repo.transaction(fn ->
       with {:ok, stat} <- fetch(stat),
